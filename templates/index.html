@@ -1,143 +1,431 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Stock Price Predictor</title>
+    <title>Enhanced Stock Price Predictor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #475569;
+            --success-color: #22c55e;
+            --danger-color: #ef4444;
+            --background-light: #f8fafc;
+            --background-dark: #1a1a1a;
+            --card-light: #ffffff;
+            --card-dark: #2d2d2d;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--background-light);
+            transition: background-color 0.3s ease;
+        }
+
+        body.dark-mode {
+            background-color: var(--background-dark);
+            color: #fff;
+        }
+
+        .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+            background-color: var(--card-light);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s ease;
         }
-        .container {
-            background-color: white;
+
+        .dark-mode .container {
+            background-color: var(--card-dark);
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
             padding: 20px;
+            background-color: rgba(241, 245, 249, 0.5);
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+
+        .dark-mode .controls {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+
         .input-group {
-            margin-bottom: 20px;
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
-        input {
-            padding: 8px;
+
+        .input-group label {
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+
+        .dark-mode .input-group label {
+            color: #e2e8f0;
+        }
+
+        input, select {
+            padding: 8px 12px;
             font-size: 16px;
-            width: 120px;
-            margin-right: 10px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: white;
         }
+
+        .dark-mode input, .dark-mode select {
+            background-color: #374151;
+            border-color: #4b5563;
+            color: white;
+        }
+
         button {
-            padding: 8px 16px;
-            background-color: #007bff;
+            padding: 10px 20px;
+            background-color: var(--primary-color);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
         }
+
         button:hover {
-            background-color: #0056b3;
+            background-color: #1d4ed8;
         }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            padding: 16px;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .dark-mode .metric-card {
+            background-color: #374151;
+            border-color: #4b5563;
+        }
+
+        .metric-title {
+            font-size: 14px;
+            color: var(--secondary-color);
+            margin-bottom: 8px;
+        }
+
+        .dark-mode .metric-title {
+            color: #e2e8f0;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
         .chart-container {
             position: relative;
-            height: 600px;
-            width: 100%;
+            height: 500px;
+            margin-top: 24px;
         }
-        #error-message {
-            color: red;
-            text-align: center;
-            margin-top: 10px;
+
+        .error-message {
+            padding: 12px;
+            background-color: #fee2e2;
+            color: var(--danger-color);
+            border-radius: 6px;
+            margin: 12px 0;
+            display: none;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .dark-mode .loading-overlay {
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 style="text-align: center;">Stock Price Predictor</h1>
-        <div class="input-group">
-            <input type="text" id="symbol" placeholder="Stock Symbol" value="AAPL">
-            <button onclick="getPrediction()">Get Prediction</button>
+        <div class="header">
+            <h1>Enhanced Stock Price Predictor</h1>
+            <button onclick="toggleTheme()" id="theme-toggle">🌙</button>
         </div>
-        <div id="error-message"></div>
+
+        <div class="controls">
+            <div class="input-group">
+                <label for="symbol">Stock Symbol</label>
+                <input type="text" id="symbol" placeholder="e.g. AAPL" value="AAPL">
+            </div>
+            <div class="input-group">
+                <label for="timeframe">Timeframe</label>
+                <select id="timeframe">
+                    <option value="1mo">1 Month</option>
+                    <option value="3mo">3 Months</option>
+                    <option value="6mo">6 Months</option>
+                    <option value="1y" selected>1 Year</option>
+                    <option value="2y">2 Years</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="prediction-days">Prediction Days</label>
+                <input type="number" id="prediction-days" value="30" min="1" max="90">
+            </div>
+            <div class="input-group">
+                <label>&nbsp;</label>
+                <button onclick="getPrediction()">Update Prediction</button>
+            </div>
+        </div>
+
+        <div id="metrics-container" class="metrics"></div>
+        <div id="error-message" class="error-message"></div>
+        
         <div class="chart-container">
+            <div id="loading-overlay" class="loading-overlay">
+                <div class="loading-spinner"></div>
+            </div>
             <canvas id="stockChart"></canvas>
         </div>
     </div>
 
     <script>
         let stockChart = null;
+        let socket = null;
+        let currentSymbol = '';
 
-        function getPrediction() {
+        function toggleTheme() {
+            const body = document.body;
+            const button = document.getElementById('theme-toggle');
+            body.classList.toggle('dark-mode');
+            button.textContent = body.classList.contains('dark-mode') ? '☀️' : '🌙';
+            
+            if (stockChart) {
+                const isDark = body.classList.contains('dark-mode');
+                updateChartTheme(isDark);
+            }
+        }
+
+        function updateChartTheme(isDark) {
+            const textColor = isDark ? '#fff' : '#000';
+            const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+            
+            stockChart.options.plugins.title.color = textColor;
+            stockChart.options.scales.y.grid.color = gridColor;
+            stockChart.options.scales.x.grid.color = gridColor;
+            stockChart.options.scales.y.ticks.color = textColor;
+            stockChart.options.scales.x.ticks.color = textColor;
+            stockChart.update();
+        }
+
+        function showLoading() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        function updateMetrics(data) {
+            const container = document.getElementById('metrics-container');
+            const lastPrice = data.historical_actual[data.historical_actual.length - 1];
+            const predictedPrice = data.future_predicted[data.future_predicted.length - 1];
+            const priceChange = ((predictedPrice - lastPrice) / lastPrice * 100).toFixed(2);
+            
+            container.innerHTML = `
+                <div class="metric-card">
+                    <div class="metric-title">Current Price</div>
+                    <div class="metric-value">$${lastPrice.toFixed(2)}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Predicted Price</div>
+                    <div class="metric-value">$${predictedPrice.toFixed(2)}</div>
+                    <div class="metric-trend ${priceChange >= 0 ? 'trend-up' : 'trend-down'}">
+                        ${priceChange >= 0 ? '↑' : '↓'} ${Math.abs(priceChange)}%
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Model Accuracy</div>
+                    <div class="metric-value">${(data.model_diagnostics.r_squared * 100).toFixed(1)}%</div>
+                </div>
+            `;
+        }
+
+        function initializeSocket() {
+            if (socket) {
+                socket.disconnect();
+            }
+
+            socket = io();
+            
+            socket.on('connect', () => {
+                if (currentSymbol) {
+                    socket.emit('subscribe', currentSymbol);
+                }
+            });
+
+            socket.on('price_update_' + currentSymbol, (data) => {
+                if (stockChart && stockChart.data.datasets[0].data.length > 0) {
+                    const lastIndex = stockChart.data.datasets[0].data.length - 1;
+                    stockChart.data.datasets[0].data[lastIndex] = data.price;
+                    stockChart.update('none');
+                }
+            });
+        }
+
+        async function getPrediction() {
             const symbol = document.getElementById('symbol').value.toUpperCase();
-            document.getElementById('error-message').textContent = '';
+            const timeframe = document.getElementById('timeframe').value;
+            const predictionDays = document.getElementById('prediction-days').value;
+            const errorElement = document.getElementById('error-message');
+            
+            errorElement.style.display = 'none';
+            showLoading();
             
             if (stockChart) {
                 stockChart.destroy();
             }
 
-            fetch(`/predict/${symbol}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (!data.success) {
-                        throw new Error(data.error);
-                    }
-                    
-                    const ctx = document.getElementById('stockChart').getContext('2d');
-                    stockChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: [...data.historical_dates, ...data.future_dates],
-                            datasets: [{
-                                label: 'Actual Price',
-                                data: [...data.historical_actual, ...Array(data.future_predicted.length).fill(null)],
-                                borderColor: 'rgb(75, 192, 192)',
-                                tension: 0.1
-                            }, {
-                                label: 'Predicted Price',
-                                data: [...data.historical_predicted, ...data.future_predicted],
-                                borderColor: 'rgb(255, 99, 132)',
-                                tension: 0.1
-                            }]
+            try {
+                const response = await fetch(`/predict/${symbol}?timeframe=${timeframe}&prediction_days=${predictionDays}`);
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error);
+                }
+                
+                currentSymbol = symbol;
+                updateMetrics(data);
+                createChart(data);
+                initializeSocket();
+                
+            } catch (error) {
+                errorElement.textContent = `Error: ${error.message}`;
+                errorElement.style.display = 'block';
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function createChart(data) {
+            const ctx = document.getElementById('stockChart').getContext('2d');
+            const isDark = document.body.classList.contains('dark-mode');
+            
+            stockChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [...data.historical_dates, ...data.future_dates],
+                    datasets: [{
+                        label: 'Actual Price',
+                        data: [...data.historical_actual, ...Array(data.future_predicted.length).fill(null)],
+                        borderColor: '#22c55e',
+                        tension: 0.1
+                    }, {
+                        label: 'Predicted Price',
+                        data: [...data.historical_predicted, ...data.future_predicted],
+                        borderColor: '#3b82f6',
+                        borderDash: [5, 5],
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Stock Price Prediction for ${currentSymbol}`,
+                            color: isDark ? '#fff' : '#000'
                         },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            interaction: {
-                                intersect: false,
-                                mode: 'index'
-                            },
-                            plugins: {
-                                title: {
-                                    display: true,
-                                    text: `Stock Price Prediction for ${symbol}`
-                                },
-                                tooltip: {
-                                    enabled: true
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: false,
-                                    title: {
-                                        display: true,
-                                        text: 'Price ($)'
-                                    }
-                                },
-                                x: {
-                                    title: {
-                                        display: true,
-                                        text: 'Date'
-                                    }
+                        tooltip: {
+                            enabled: true,
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
                                 }
                             }
                         }
-                    });
-                })
-                .catch(error => {
-                    document.getElementById('error-message').textContent = `Error: ${error.message}`;
-                });
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Price ($)'
+                            },
+                            grid: {
+                                color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                color: isDark ? '#fff' : '#000'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            },
+                            grid: {
+                                color: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                            },
+                            ticks: {
+                                color: isDark ? '#fff' : '#000'
+                            }
+                        }
+                    }
+                }
+            });
         }
 
-        // Initial load
         document.addEventListener('DOMContentLoaded', () => {
             getPrediction();
         });
