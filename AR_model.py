@@ -138,8 +138,7 @@ def make_prediction(data, beta, y_scale, future_days=30):
     
     # Calculate prediction error variance from historical predictions
     pred_error_var = np.var(y_normalized - y_pred)
-    
-    for i in range(future_days):
+    for i in range(int(future_days)):
         # Make next prediction
         next_pred = (beta.reshape(1, -1) @ last_values[-beta.size:].reshape(-1, 1))[0]
         
@@ -196,8 +195,7 @@ def get_technical_indicators(data):
     close = data['Close'].values
     high = data['High'].values
     low = data['Low'].values
-    volume = data['Volume'].values
-    
+    volume = np.asarray(data['Volume'].values, dtype=float)
     # Calculate various technical indicators
     indicators = {
         'rsi': talib.RSI(close),
@@ -239,12 +237,15 @@ def calculate_confidence_metrics(actual, predicted):
         'mape': float(mape)
     }
 
+@app.route('/')
+def home():
+    return render_template('index.html')
+
 @app.route('/predict/<symbol>')
 def predict_stock(symbol):
     try:
         timeframe = request.args.get('timeframe', '1y')
         prediction_days = int(request.args.get('prediction_days', 30))
-        
         # Get historical data
         stock = yf.Ticker(symbol)
         df = stock.history(period=timeframe)
@@ -286,9 +287,9 @@ def predict_stock(symbol):
             'confidence_intervals': conf_intervals,
             'model_diagnostics': diagnostics,
             'technical_indicators': {
-                'rsi': indicators['rsi'].tolist(),
-                'macd': indicators['macd'].tolist(),
-                'volume': df['Volume'].tolist()
+                'rsi': [None if pd.isna(x) else x for x in indicators['rsi']],
+                'macd': [None if pd.isna(x) else x for x in indicators['macd']],
+                'volume': [None if pd.isna(x) else x for x in df['Volume']]
             },
             'model_info': {
                 'order': int(model_order),
